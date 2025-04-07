@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.models.lead import Lead
 from app.schemas.lead import LeadCreate, LeadUpdate
 from app.utils.email import send_lead_notification
-from app.utils.crm import sync_lead_with_crm
+
 
 class LeadManager:
     def __init__(self, db: Session):
@@ -29,8 +29,7 @@ class LeadManager:
         # Send notification to agents
         await send_lead_notification(lead)
         
-        # Sync with CRM system
-        await sync_lead_with_crm(lead)
+
         
         return lead
 
@@ -45,8 +44,7 @@ class LeadManager:
         await self.db.commit()
         await self.db.refresh(lead)
         
-        # Sync status update with CRM
-        await sync_lead_with_crm(lead)
+
         
         return lead
 

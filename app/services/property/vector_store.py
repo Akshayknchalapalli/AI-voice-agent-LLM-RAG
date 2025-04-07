@@ -10,7 +10,7 @@ settings = get_settings()
 class PropertyVectorStore:
     def __init__(self):
         # Initialize Pinecone
-        pinecone.init(
+        self.pc = pinecone.Pinecone(
             api_key=settings.PINECONE_API_KEY,
             environment=settings.PINECONE_ENVIRONMENT
         )
@@ -18,14 +18,14 @@ class PropertyVectorStore:
         self.embeddings = OpenAIEmbeddings(openai_api_key=settings.OPENAI_API_KEY)
         
         # Create index if it doesn't exist
-        if self.index_name not in pinecone.list_indexes():
-            pinecone.create_index(
+        if self.index_name not in self.pc.list_indexes().names():
+            self.pc.create_index(
                 name=self.index_name,
                 dimension=1536,  # OpenAI embedding dimension
                 metric="cosine"
             )
         
-        self.index = pinecone.Index(self.index_name)
+        self.index = self.pc.Index(self.index_name)
 
     async def add_property(self, property_id: int, text: str, metadata: Dict):
         """Add a property to the vector store"""

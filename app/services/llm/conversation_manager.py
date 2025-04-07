@@ -1,7 +1,7 @@
-from langchain.chat_models import ChatOpenAI
+from langchain_community.chat_models import ChatOpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationChain
-from langchain.callbacks import AsyncCallbackManager
+from langchain.callbacks.manager import AsyncCallbackManager
 from app.services.llm.prompts import (
     REAL_ESTATE_AGENT_PROMPT,
     PROPERTY_FILTER_PROMPT,

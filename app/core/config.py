@@ -3,7 +3,12 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     # Database
-    DATABASE_URL: str
+    DATABASE_URL: str = "postgresql://localhost/ai_voice_agent"
+    
+    # Supabase
+    SUPABASE_URL: str
+    SUPABASE_KEY: str
+    SUPABASE_JWT_SECRET: str
     
     # Redis
     REDIS_URL: str
@@ -13,10 +18,16 @@ class Settings(BaseSettings):
     
     # Pinecone
     PINECONE_API_KEY: str
+    PINECONE_ENVIRONMENT: str
     
     # Twilio
     TWILIO_ACCOUNT_SID: str
     TWILIO_AUTH_TOKEN: str
+    
+    # LiveKit
+    LIVEKIT_API_KEY: str = ""
+    LIVEKIT_API_SECRET: str = ""
+    LIVEKIT_WS_URL: str = "ws://localhost:7880"
     
     # Voice Services
     DEEPGRAM_API_KEY: str
@@ -31,44 +42,9 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: str
     AGENT_NOTIFICATION_EMAIL: str
     
-    # CRM
-    CRM_API_URL: str
-    CRM_API_KEY: str
-    
     class Config:
         env_file = '.env'
-
-@lru_cache()
-def get_settings() -> Settings:
-    return Settings()
-
-class Settings(BaseSettings):
-    # Database
-    DATABASE_URL: str
-    REDIS_URL: str
-    
-    # Voice Services
-    TWILIO_ACCOUNT_SID: str
-    TWILIO_AUTH_TOKEN: str
-    LIVEKIT_API_KEY: str
-    LIVEKIT_API_SECRET: str
-    
-    # AI Services
-    OPENAI_API_KEY: str
-    ELEVENLABS_API_KEY: str
-    DEEPGRAM_API_KEY: str
-    
-    # Vector Database
-    PINECONE_API_KEY: str
-    PINECONE_ENVIRONMENT: str
-    
-    # Security
-    JWT_SECRET_KEY: str
-    JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    
-    class Config:
-        env_file = ".env"
+        case_sensitive = True
 
 @lru_cache()
 def get_settings() -> Settings:

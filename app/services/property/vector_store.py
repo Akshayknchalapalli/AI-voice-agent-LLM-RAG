@@ -1,6 +1,6 @@
-import pinecone
+from pinecone import Pinecone
 from app.core.config import get_settings
-from langchain.embeddings import OpenAIEmbeddings
+from openai import OpenAI
 from typing import List, Dict, Optional
 import asyncio
 import json
@@ -10,31 +10,23 @@ settings = get_settings()
 class PropertyVectorStore:
     def __init__(self):
         # Initialize Pinecone
-        self.pc = pinecone.Pinecone(
-            api_key=settings.PINECONE_API_KEY,
-            environment=settings.PINECONE_ENVIRONMENT
-        )
-        self.index_name = "properties"
-        self.embeddings = OpenAIEmbeddings(openai_api_key=settings.OPENAI_API_KEY)
+        self.pc = Pinecone(api_key=settings.PINECONE_API_KEY)
+        self.index_name = "properties"  # Use existing index
+        self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
         
-        # Create index if it doesn't exist
-        if self.index_name not in self.pc.list_indexes().names():
-            self.pc.create_index(
-                name=self.index_name,
-                dimension=1536,  # OpenAI embedding dimension
-                metric="cosine"
-            )
-        
+        # Connect to existing index
         self.index = self.pc.Index(self.index_name)
 
-    async def add_property(self, property_id: int, text: str, metadata: Dict):
+    async def add_property(self, property_id: str, text: str, metadata: Dict):
         """Add a property to the vector store"""
         try:
             # Generate embedding
-            vector = await asyncio.to_thread(
-                self.embeddings.embed_query,
-                text
+            response = await asyncio.to_thread(
+                self.client.embeddings.create,
+                input=text,
+                model="text-embedding-ada-002"  # Using older model with higher rate limits
             )
+            vector = response.data[0].embedding
             
             # Upsert to Pinecone
             self.index.upsert(
@@ -49,15 +41,17 @@ class PropertyVectorStore:
         self,
         query: str,
         filter_dict: Optional[Dict] = None,
-        top_k: int = 5
+        top_k: int = 10
     ) -> List[Dict]:
-        """Search for similar properties"""
+        """Search for properties using semantic similarity"""
         try:
             # Generate query embedding
-            query_vector = await asyncio.to_thread(
-                self.embeddings.embed_query,
-                query
+            response = await asyncio.to_thread(
+                self.client.embeddings.create,
+                input=query,
+                model="text-embedding-ada-002"
             )
+            query_vector = response.data[0].embedding
             
             # Search in Pinecone
             results = self.index.query(
@@ -67,25 +61,9 @@ class PropertyVectorStore:
                 include_metadata=True
             )
             
-            return [
-                {
-                    "id": match.id,
-                    "score": match.score,
-                    "metadata": match.metadata
-                }
-                for match in results.matches
-            ]
+            return results.matches
         except Exception as e:
             print(f"Error searching properties: {e}")
             return []
-
-    def delete_property(self, property_id: int):
-        """Delete a property from the vector store"""
-        try:
-            self.index.delete(ids=[str(property_id)])
-            return True
-        except Exception as e:
-            print(f"Error deleting property: {e}")
-            return False
 
 vector_store = PropertyVectorStore()

@@ -1,124 +1,147 @@
-import React, { useState } from 'react';
-import { Container, Typography, Box, Button, Grid, Paper } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { Container, Typography, Box, Grid, Paper, Button } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import axios from 'axios';
-import VoiceChat from '../VoiceChat/VoiceChat';
+import axiosInstance from '../../utils/axios';
 import PropertyCard from '../PropertyList/PropertyCard';
+import { useAuth } from '../../contexts/AuthContext';
+import FloatingVoiceChat from '../FloatingVoiceChat/FloatingVoiceChat';
+
+interface Property {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  address?: string;
+  city: string;
+  state: string;
+  bedrooms?: number;
+  bathrooms?: number;
+  area?: number;
+  images?: string[];
+  features?: string[];
+  property_type?: string;
+  type?: string;  // For backward compatibility
+  num_bedrooms?: number;  // For backward compatibility
+  num_bathrooms?: number;  // For backward compatibility
+  square_feet?: number;  // For backward compatibility
+}
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const [showVoiceChat, setShowVoiceChat] = useState(false);
+  const { isAuthenticated, user, logout } = useAuth();
+  const [recommendations, setRecommendations] = useState<Property[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [favorites, setFavorites] = useState<string[]>([]);
 
-  // Sample property data - replace with actual API call
-  const sampleProperties = [
-    {
-      id: 1,
-      title: "Modern Downtown Apartment",
-      description: "Beautiful 2 bedroom apartment with stunning city views and modern amenities",
-      price: "$250,000",
-      location: "Downtown, City Center",
-      imageUrl: "https://placehold.co/600x400/png?text=Modern+Apartment"
-    },
-    {
-      id: 2,
-      title: "Suburban Family Home",
-      description: "Spacious 4 bedroom house with large backyard and updated kitchen",
-      price: "$450,000",
-      location: "Peaceful Suburbs",
-      imageUrl: "https://placehold.co/600x400/png?text=Family+Home"
-    },
-    {
-      id: 3,
-      title: "Luxury Penthouse",
-      description: "Exclusive penthouse with panoramic views and high-end finishes",
-      price: "$850,000",
-      location: "City Center",
-      imageUrl: "https://placehold.co/600x400/png?text=Luxury+Penthouse"
-    },
-    {
-      id: 4,
-      title: "Cozy Studio Apartment",
-      description: "Perfect starter home or investment property in prime location",
-      price: "$150,000",
-      location: "University District",
-      imageUrl: "https://placehold.co/600x400/png?text=Studio+Apartment"
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
     }
-  ];
+
+    // Fetch personalized recommendations when component mounts
+    const fetchRecommendations = async () => {
+      try {
+        console.log('Fetching recommendations...');
+        const response = await axiosInstance.get('/api/recommendations/personalized', {
+          params: {
+            limit: 6
+          }
+        });
+        console.log('Recommendations response:', response.data);
+        setRecommendations(response.data.recommendations);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching recommendations:', error);
+        toast.error('Failed to load recommendations');
+        setLoading(false);
+      }
+    };
+
+    fetchRecommendations();
+  }, [isAuthenticated, navigate]);
 
   const handleLogout = async () => {
     try {
-      await axios.post('/api/auth/logout');
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      await logout();
       toast.success('Successfully logged out');
-      window.location.href = '/login';
+      navigate('/login');
     } catch (error) {
       console.error('Logout error:', error);
-      toast.error('Error during logout');
+      toast.error('Failed to logout');
     }
   };
 
-  const toggleVoiceChat = () => {
-    setShowVoiceChat(!showVoiceChat);
+  const handlePropertiesUpdate = (updatedProperties: Property[]) => {
+    console.log('Updating properties:', updatedProperties);
+    if (Array.isArray(updatedProperties)) {
+      setRecommendations(updatedProperties);
+    } else {
+      console.error('Invalid properties update:', updatedProperties);
+    }
   };
+
+  const handleFavorite = (propertyId: string) => {
+    setFavorites(prev => 
+      prev.includes(propertyId) 
+        ? prev.filter(id => id !== propertyId)
+        : [...prev, propertyId]
+    );
+  };
+
+  const handleContact = (propertyId: string) => {
+    toast.info(`Contact request sent for property ${propertyId}`);
+  };
+
+  if (!isAuthenticated || !user) {
+    return null;
+  }
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Grid container spacing={3}>
-        {/* Header Section */}
-        <Grid item xs={12}>
-          <Paper sx={{ p: 3, mb: 3 }}>
-            <Box display="flex" justifyContent="space-between" alignItems="center">
-              <Box>
-                <Typography variant="h4" component="h1" gutterBottom>
-                  Welcome Back!
-                </Typography>
-                <Typography variant="body1" color="text.secondary">
-                  Hello, {user.email}
-                </Typography>
-              </Box>
-              <Button variant="outlined" color="primary" onClick={handleLogout}>
-                Logout
-              </Button>
-            </Box>
-          </Paper>
-        </Grid>
-
-        {/* Voice Chat Section */}
-        <Grid item xs={12}>
-          <Paper sx={{ p: 3, mb: 3 }}>
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-              <Typography variant="h5">AI Voice Assistant</Typography>
-              <Button 
-                variant="contained" 
-                color={showVoiceChat ? "secondary" : "primary"}
-                onClick={toggleVoiceChat}
-              >
-                {showVoiceChat ? "Close Voice Chat" : "Start Voice Chat"}
-              </Button>
-            </Box>
-            {showVoiceChat && <VoiceChat />}
-          </Paper>
-        </Grid>
-
-        {/* Property Listings */}
-        <Grid item xs={12}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h5" gutterBottom>
-              Featured Properties
+      <Box mb={4}>
+        <Grid container spacing={3} alignItems="center" justifyContent="space-between">
+          <Grid item>
+            <Typography variant="h4" component="h1" gutterBottom>
+              Welcome{user?.email ? `, ${user.email}` : ''}
             </Typography>
-            <Grid container spacing={3}>
-              {sampleProperties.map((property) => (
-                <Grid item xs={12} sm={6} md={3} key={property.id}>
-                  <PropertyCard {...property} />
-                </Grid>
-              ))}
-            </Grid>
-          </Paper>
+          </Grid>
+          <Grid item>
+            <Button variant="contained" color="secondary" onClick={handleLogout}>
+              Logout
+            </Button>
+          </Grid>
         </Grid>
-      </Grid>
+      </Box>
+
+      <Box sx={{ my: 4 }}>
+        <Typography variant="h5" gutterBottom>
+          {recommendations.length > 0 ? 'Properties Found' : 'Recommended Properties'}
+        </Typography>
+        {loading ? (
+          <Typography>Loading properties...</Typography>
+        ) : recommendations.length > 0 ? (
+          <Grid container spacing={3}>
+            {recommendations.map((property: Property) => (
+              <Grid item xs={12} sm={6} md={4} key={property.id}>
+                <PropertyCard 
+                  property={property}
+                  onFavorite={handleFavorite}
+                  onContact={handleContact}
+                  isFavorite={favorites.includes(property.id)}
+                />
+              </Grid>
+            ))}
+          </Grid>
+        ) : (
+          <Paper sx={{ p: 3, textAlign: 'center' }}>
+            <Typography>No properties available at the moment.</Typography>
+          </Paper>
+        )}
+      </Box>
+
+      <FloatingVoiceChat onPropertiesUpdate={handlePropertiesUpdate} />
     </Container>
   );
 };

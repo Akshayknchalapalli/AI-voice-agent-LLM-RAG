@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 axios.defaults.baseURL = 'http://localhost:8000';
 axios.defaults.headers.common['Content-Type'] = 'application/json';
 axios.defaults.withCredentials = true;
+axios.defaults.headers.common['Accept'] = 'application/json';
 
 // Add a request interceptor
 axios.interceptors.request.use(
@@ -14,6 +15,8 @@ axios.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Ensure CORS credentials are sent
+    config.withCredentials = true;
     return config;
   },
   (error) => {
@@ -54,7 +57,6 @@ axios.interceptors.response.use(
       // Network error
       toast.error('Network error. Please check your connection.');
     } else {
-      // Other errors
       toast.error('An unexpected error occurred.');
     }
 

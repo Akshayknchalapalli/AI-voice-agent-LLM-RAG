@@ -1,157 +1,142 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
-from app.models.property import Property, PropertyType, ListingType
-from app.services.property.vector_store import vector_store
 from typing import List, Dict, Optional
-import json
+from app.core.supabase import get_supabase_client
+from app.services.vector_store.pinecone_service import pinecone_service
 
 class PropertyService:
-    def __init__(self, db: Session):
-        self.db = db
+    def __init__(self, auth_token: str):
+        self.supabase = get_supabase_client(auth_token)
 
-    async def create_property(self, property_data: Dict) -> Property:
+    async def create_property(self, property_data: Dict) -> Dict:
         """Create a new property listing"""
         try:
             # Create property in database
-            property_obj = Property(**property_data)
-            self.db.add(property_obj)
-            self.db.commit()
-            self.db.refresh(property_obj)
+            response = self.supabase.table('properties').insert([property_data]).execute()
+            property_id = response.data[0]['id']
             
             # Add to vector store
-            await vector_store.add_property(
-                property_id=property_obj.id,
-                text=property_obj.to_embedding_text(),
-                metadata=property_obj.to_dict()
+            await pinecone_service.upsert_vectors(
+                index_name="properties",
+                namespace="listings",
+                vectors=[{
+                    "id": str(property_id),
+                    "text": property_data['to_embedding_text'](),
+                    "metadata": property_data
+                }]
             )
             
-            return property_obj
+            return self.supabase.table('properties').select('*').eq('id', property_id).single().execute().data
         except Exception as e:
-            self.db.rollback()
             raise Exception(f"Failed to create property: {str(e)}")
+
+    async def get_properties(self, limit: int = 10) -> List[Dict]:
+        """Get a list of properties"""
+        try:
+            response = self.supabase.table('properties')\
+                .select('*')\
+                .limit(limit)\
+                .execute()
+            return response.data
+        except Exception as e:
+            raise Exception(f"Failed to fetch properties: {str(e)}")
 
     async def search_properties(
         self,
         query: str = "",
-        filters: Optional[Dict] = None,
+        min_price: Optional[int] = None,
+        max_price: Optional[int] = None,
+        bedrooms: Optional[int] = None,
+        bathrooms: Optional[float] = None,
+        property_type: Optional[str] = None,
+        listing_type: Optional[str] = None,
         use_semantic: bool = True,
         limit: int = 10
     ) -> List[Dict]:
-        """Search for properties using both vector and traditional search"""
+        """Search for properties with filters"""
         try:
+            # Start with base query
+            query_builder = self.supabase.table('properties').select('*')
+            
+            # Apply filters
+            if min_price is not None:
+                query_builder = query_builder.gte('price', min_price)
+            if max_price is not None:
+                query_builder = query_builder.lte('price', max_price)
+            if bedrooms is not None:
+                query_builder = query_builder.eq('bedrooms', bedrooms)
+            if bathrooms is not None:
+                query_builder = query_builder.eq('bathrooms', bathrooms)
+            if property_type:
+                query_builder = query_builder.eq('property_type', property_type)
+            if listing_type:
+                query_builder = query_builder.eq('listing_type', listing_type)
+            
+            # If semantic search is enabled and we have a query
             if use_semantic and query:
-                # Semantic search using vector store
-                vector_results = await vector_store.search_properties(
+                # Get vector search results
+                vector_results = await pinecone_service.query_vectors(
+                    index_name="properties",
+                    namespace="listings",
                     query=query,
-                    filter_dict=filters,
                     top_k=limit
                 )
                 
-                # Get property IDs from vector search
-                property_ids = [int(result["id"]) for result in vector_results]
-                
-                # Fetch full property objects
-                properties = self.db.query(Property).filter(
-                    Property.id.in_(property_ids)
-                ).all()
-                
-                # Sort properties to match vector search order
-                id_to_property = {p.id: p for p in properties}
-                return [
-                    id_to_property[int(result["id"])].to_dict()
-                    for result in vector_results
-                    if int(result["id"]) in id_to_property
-                ]
+                # Get IDs from vector search
+                property_ids = [result['id'] for result in vector_results]
+                query_builder = query_builder.in_('id', property_ids)
             
-            else:
-                # Traditional database search
-                query_obj = self.db.query(Property)
-                
-                if filters:
-                    conditions = []
-                    
-                    if "price_range" in filters:
-                        min_price, max_price = filters["price_range"]
-                        conditions.append(Property.price.between(min_price, max_price))
-                    
-                    if "bedrooms" in filters:
-                        conditions.append(Property.bedrooms >= filters["bedrooms"])
-                    
-                    if "bathrooms" in filters:
-                        conditions.append(Property.bathrooms >= filters["bathrooms"])
-                    
-                    if "property_type" in filters:
-                        conditions.append(Property.property_type == filters["property_type"])
-                    
-                    if "listing_type" in filters:
-                        conditions.append(Property.listing_type == filters["listing_type"])
-                    
-                    if conditions:
-                        query_obj = query_obj.filter(and_(*conditions))
-                
-                properties = query_obj.limit(limit).all()
-                return [p.to_dict() for p in properties]
-        
+            # Execute query with limit
+            response = query_builder.limit(limit).execute()
+            return response.data
+            
         except Exception as e:
             raise Exception(f"Failed to search properties: {str(e)}")
 
-    def get_property(self, property_id: int) -> Optional[Dict]:
+    async def get_property(self, property_id: str) -> Dict:
         """Get a property by ID"""
         try:
-            property_obj = self.db.query(Property).filter(
-                Property.id == property_id
-            ).first()
-            return property_obj.to_dict() if property_obj else None
+            response = self.supabase.table('properties')\
+                .select('*')\
+                .eq('id', property_id)\
+                .single()\
+                .execute()
+            return response.data
         except Exception as e:
             raise Exception(f"Failed to get property: {str(e)}")
 
-    async def update_property(self, property_id: int, property_data: Dict) -> Optional[Dict]:
+    async def update_property(self, property_id: str, property_data: Dict) -> Dict:
         """Update a property listing"""
         try:
-            property_obj = self.db.query(Property).filter(
-                Property.id == property_id
-            ).first()
-            
-            if not property_obj:
-                return None
-            
             # Update database
-            for key, value in property_data.items():
-                setattr(property_obj, key, value)
-            
-            self.db.commit()
-            self.db.refresh(property_obj)
+            response = self.supabase.table('properties').update([property_data]).eq('id', property_id).execute()
             
             # Update vector store
-            await vector_store.add_property(
-                property_id=property_obj.id,
-                text=property_obj.to_embedding_text(),
-                metadata=property_obj.to_dict()
+            await pinecone_service.upsert_vectors(
+                index_name="properties",
+                namespace="listings",
+                vectors=[{
+                    "id": str(property_id),
+                    "text": property_data['to_embedding_text'](),
+                    "metadata": property_data
+                }]
             )
             
-            return property_obj.to_dict()
+            return self.supabase.table('properties').select('*').eq('id', property_id).single().execute().data
         except Exception as e:
-            self.db.rollback()
             raise Exception(f"Failed to update property: {str(e)}")
 
-    async def delete_property(self, property_id: int) -> bool:
+    async def delete_property(self, property_id: str) -> bool:
         """Delete a property listing"""
         try:
-            property_obj = self.db.query(Property).filter(
-                Property.id == property_id
-            ).first()
-            
-            if not property_obj:
-                return False
-            
             # Delete from database
-            self.db.delete(property_obj)
-            self.db.commit()
+            response = self.supabase.table('properties').delete().eq('id', property_id).execute()
             
             # Delete from vector store
-            vector_store.delete_property(property_id)
+            await pinecone_service.delete_vectors(
+                index_name="properties",
+                namespace="listings",
+                ids=[str(property_id)]
+            )
             
-            return True
+            return response.status_code == 200
         except Exception as e:
-            self.db.rollback()
             raise Exception(f"Failed to delete property: {str(e)}")

@@ -1,9 +1,14 @@
 from pydantic_settings import BaseSettings
 from typing import List
 from functools import lru_cache
+import logging
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "AI Voice Agent"
+    VERSION: str = "1.0.0"
+    DESCRIPTION: str = "AI-powered voice agent for real estate inquiries and recommendations"
+    ENVIRONMENT: str = "development"
+    LOG_LEVEL: str = "INFO"
     
     # Database
     SUPABASE_URL: str
@@ -18,9 +23,22 @@ class Settings(BaseSettings):
     DEEPGRAM_API_KEY: str | None = None
     
     # CORS Settings
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:3001"]
-    CORS_METHODS: List[str] = ["*"]
-    CORS_HEADERS: List[str] = ["*"]
+    ALLOWED_HOSTS: List[str] = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:8000",
+        "ws://localhost:3000",
+        "ws://localhost:3001",
+        "ws://localhost:5173",
+        "ws://127.0.0.1:3000",
+        "ws://127.0.0.1:3001",
+        "ws://127.0.0.1:5173",
+        "ws://127.0.0.1:8000"
+    ]
     
     # Other Settings (Optional)
     FRONTEND_URL: str = "http://localhost:3000"

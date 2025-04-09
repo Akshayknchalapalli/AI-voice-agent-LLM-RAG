@@ -111,6 +111,14 @@ class AuthService:
 
     async def verify_token(self, token: str) -> Dict[str, Any]:
         try:
+            # Strip 'Bearer ' prefix if present
+            if token.startswith('Bearer '):
+                token = token.split(' ')[1]
+                
+            # Validate token format
+            if not token or not isinstance(token, str):
+                raise HTTPException(status_code=401, detail="Invalid token format")
+                
             response = self.auth_client.auth.get_user(token)
             if not response or not response.user:
                 raise HTTPException(status_code=401, detail="Invalid token")
@@ -125,6 +133,9 @@ class AuthService:
         except Exception as e:
             print(f"Error in verify_token: {e}")
             print(f"Traceback: {traceback.format_exc()}")
+            # Pass through HTTPException if it's already been raised
+            if isinstance(e, HTTPException):
+                raise e
             raise HTTPException(status_code=401, detail="Invalid token")
 
     async def sign_out(self, token: str) -> bool:

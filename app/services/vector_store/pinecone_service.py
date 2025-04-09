@@ -220,4 +220,51 @@ class PineconeService:
             logger.error(f"Error upserting to {index_type} index: {str(e)}")
             raise
 
+    async def search_similar(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        """Search for similar documents using the query"""
+        try:
+            # Generate embedding for the query
+            response = self.model.generate_content(query)
+            query_embedding = response.embedding
+
+            # Search in Pinecone
+            results = self.index.query(
+                vector=query_embedding,
+                top_k=top_k,
+                include_metadata=True
+            )
+
+            # Return the results
+            return [match.metadata for match in results.matches]
+            
+        except Exception as e:
+            logger.error(f"Error in similarity search: {str(e)}")
+            return []
+
+    async def search_properties(self, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Search for properties using filters"""
+        try:
+            # Convert filters to vector query
+            query_text = " ".join([f"{k}: {v}" for k, v in filters.items() if v])
+            
+            # Generate embedding for the query
+            response = self.model.generate_content(query_text)
+            query_embedding = response.embedding
+            
+            # Search in Pinecone
+            results = self.index_connections["properties"].query(
+                vector=query_embedding,
+                namespace=self.indexes["properties"]["namespace"],
+                top_k=5,
+                include_metadata=True
+            )
+            
+            # Extract and return property data
+            properties = [match.metadata for match in results.matches]
+            return properties
+            
+        except Exception as e:
+            logger.error(f"Error searching properties: {str(e)}")
+            return []
+
 pinecone_service = PineconeService()

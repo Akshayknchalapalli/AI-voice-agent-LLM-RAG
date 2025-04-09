@@ -18,8 +18,16 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
-    }
+    },
+    "typeRoots": ["./src/types", "./node_modules/@types"],
+    "allowJs": true,
+    "allowSyntheticDefaultImports": true
   },
-  "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["src/**/*", "src/types/*.d.ts"],
+  "exclude": ["node_modules"],
+  "references": [
+    { "path": "./tsconfig/react-library.json" },
+    { "path": "./tsconfig.node.json" },
+    { "path": "./tsconfig.supabase.json" }
+  ]
 }

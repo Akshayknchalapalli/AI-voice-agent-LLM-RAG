@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Float, JSON, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, JSON, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 from app.models.base import TimestampedBase
 import numpy as np
@@ -7,22 +7,35 @@ class UserPreference(TimestampedBase):
     __tablename__ = "user_preferences"
 
     # Session or user identifier
+    id = Column(Integer, primary_key=True, index=True)
     session_id = Column(String, unique=True, nullable=False)
     
-    # Explicit preferences
+    # Price preferences
     min_price = Column(Integer, nullable=True)
     max_price = Column(Integer, nullable=True)
+    price_range_weight = Column(Float, default=1.0)
+    
+    # Location preferences
+    preferred_locations = Column(JSON, default=list)  # List of preferred cities/areas
+    location_weight = Column(Float, default=1.0)
+    
+    # Size preferences
     min_bedrooms = Column(Integer, nullable=True)
     min_bathrooms = Column(Float, nullable=True)
-    preferred_locations = Column(JSON, default=list)  # List of preferred cities/areas
-    property_types = Column(JSON, default=list)  # List of preferred property types
-    must_have_features = Column(JSON, default=list)  # List of required features
-    
-    # Implicit preferences (learned from interactions)
-    price_range_weight = Column(Float, default=1.0)
-    location_weight = Column(Float, default=1.0)
+    min_square_feet = Column(Integer, nullable=True)
     size_weight = Column(Float, default=1.0)
+    
+    # Feature preferences
+    must_have_features = Column(JSON, default=list)  # List of required features
+    nice_to_have_features = Column(JSON, default=list)
     features_weight = Column(Float, default=1.0)
+    
+    # Property type preferences
+    property_types = Column(JSON, default=list)  # List of preferred property types
+    property_type_weight = Column(Float, default=1.0)
+    
+    # Active status
+    is_active = Column(Boolean, default=True)
     
     # Interaction history
     viewed_properties = Column(JSON, default=list)  # List of viewed property IDs

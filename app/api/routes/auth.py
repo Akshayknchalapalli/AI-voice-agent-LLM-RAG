@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import JSONResponse
 from app.services.auth.auth_service import AuthService
 from app.services.auth.user_service import user_service
 from app.api.dependencies.auth import get_auth_service
@@ -7,10 +8,11 @@ from app.models.user import UserCreate
 from pydantic import BaseModel, EmailStr
 from typing import Dict, Any, Optional
 import traceback
-from fastapi.responses import JSONResponse
+from app.services.voice.livekit_service import livekit_service
+from app.core.config import get_settings
 
 router = APIRouter()
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)  # Make bearer token optional for OPTIONS requests
 
 class UserCredentials(BaseModel):
     email: EmailStr
@@ -21,6 +23,41 @@ class SignupRequest(UserCreate):
 
 class PasswordResetRequest(BaseModel):
     email: EmailStr
+
+@router.options("/login")
+async def login_options():
+    return JSONResponse(
+        content={},
+        headers={
+            "Access-Control-Allow-Origin": "http://localhost:3000",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Allow-Credentials": "true",
+        }
+    )
+
+@router.post("/login")
+async def login(
+    credentials: UserCredentials,
+    auth_service: AuthService = Depends(get_auth_service)
+) -> Dict[str, Any]:
+    try:
+        print(f"Login attempt for email: {credentials.email}")
+        result = await auth_service.sign_in(credentials.email, credentials.password)
+        print(f"Login successful for email: {credentials.email}")
+        return JSONResponse(
+            content=result,
+            headers={
+                "Access-Control-Allow-Origin": "http://localhost:3000",
+                "Access-Control-Allow-Credentials": "true",
+            }
+        )
+    except Exception as e:
+        print(f"Login error: {str(e)}")
+        print(f"Traceback: {traceback.format_exc()}")
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
 @router.get("/verify")
 async def verify_token(
@@ -67,23 +104,6 @@ async def signup(
         print(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/login")
-async def login(
-    credentials: UserCredentials,
-    auth_service: AuthService = Depends(get_auth_service)
-) -> Dict[str, Any]:
-    try:
-        print(f"Login attempt for email: {credentials.email}")
-        result = await auth_service.sign_in(credentials.email, credentials.password)
-        print(f"Login successful for email: {credentials.email}")
-        return JSONResponse(content=result)
-    except Exception as e:
-        print(f"Login error: {str(e)}")
-        print(f"Traceback: {traceback.format_exc()}")
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-
 @router.post("/logout")
 async def logout(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -111,3 +131,29 @@ async def reset_password(
         print(f"Password reset error: {str(e)}")
         print(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail="Error sending password reset email")
+
+@router.get("/livekit-token")
+async def get_livekit_token(
+    userId: str,
+    roomName: str,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    auth_service: AuthService = Depends(get_auth_service)
+):
+    """Generate a LiveKit token for a user to join a room"""
+    try:
+        # Verify the user's token
+        user = await verify_token(credentials, auth_service)
+        
+        # Generate LiveKit token
+        token = await livekit_service.generate_token(roomName, userId, False)
+        
+        # Get settings for LiveKit WebSocket URL
+        settings = get_settings()
+        
+        return {
+            "token": token,
+            "ws_url": settings.LIVEKIT_WS_URL
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))

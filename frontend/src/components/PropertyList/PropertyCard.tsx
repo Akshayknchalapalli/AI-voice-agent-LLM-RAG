@@ -1,91 +1,132 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Card,
   CardContent,
   CardMedia,
   Typography,
   Box,
-  Chip,
   IconButton,
   CardActions,
 } from '@mui/material';
 import {
   Favorite,
   FavoriteBorder,
-  Phone,
   LocationOn,
+  Hotel,
+  Bathtub,
+  SquareFoot,
+  ContactMail,
 } from '@mui/icons-material';
 
-interface PropertyCardProps {
-  id: number;
+interface Property {
+  id: string;
   title: string;
   description: string;
-  price: string;
-  location: string;
-  imageUrl: string;
+  price: number;
+  address?: string;
+  city: string;
+  state: string;
+  bedrooms?: number;
+  bathrooms?: number;
+  square_feet?: number;
+  images?: string[];
+  features?: string[];
+  property_type?: string;
+  type?: string;  // For backward compatibility
+  num_bedrooms?: number;  // For backward compatibility
+  num_bathrooms?: number;  // For backward compatibility
+  area?: number;  // For backward compatibility
 }
 
-const PropertyCard: React.FC<PropertyCardProps> = ({
-  id,
-  title,
-  description,
-  price,
-  location,
-  imageUrl,
-}) => {
-  const [isFavorite, setIsFavorite] = useState(false);
+interface PropertyCardProps {
+  property: Property;
+  onFavorite: (propertyId: string) => void;
+  onContact: (propertyId: string) => void;
+  isFavorite: boolean;
+}
 
-  const handleFavorite = () => {
-    setIsFavorite(!isFavorite);
+const PropertyCard: React.FC<PropertyCardProps> = ({ property, onFavorite, onContact, isFavorite }) => {
+  const formatPrice = (price: number) => {
+    if (price >= 10000000) {
+      return `${(price / 10000000).toFixed(1)} Cr`;
+    } else if (price >= 100000) {
+      return `${(price / 100000).toFixed(1)} Lakh`;
+    } else {
+      return `₹${price.toLocaleString('en-IN')}`;
+    }
   };
 
-  const handleContact = () => {
-    // You can implement contact functionality here
-    console.log('Contact clicked for property:', id);
-  };
+  // Handle both old and new property field names
+  const propertyType = property.property_type || property.type || 'Not specified';
+  const bedrooms = property.bedrooms || property.num_bedrooms;
+  const bathrooms = property.bathrooms || property.num_bathrooms;
+  const area = property.square_feet || property.area;
 
   return (
-    <Card elevation={3} sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <CardMedia
         component="img"
         height="200"
-        image={imageUrl}
-        alt={title}
-        sx={{ objectFit: 'cover' }}
+        image={property.images?.[0] || 'https://via.placeholder.com/300x200?text=No+Image'}
+        alt={property.title}
       />
       <CardContent sx={{ flexGrow: 1 }}>
-        <Typography gutterBottom variant="h6" component="div" noWrap>
-          {title}
+        <Typography gutterBottom variant="h6" component="h2">
+          {property.title}
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical',
-        }}>
-          {description}
-        </Typography>
-        <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-          <LocationOn color="action" fontSize="small" />
-          <Typography variant="body2" color="text.secondary">
-            {location}
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+          <LocationOn fontSize="small" color="action" />
+          <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+            {property.city}, {property.state}
           </Typography>
         </Box>
-        <Typography variant="h6" color="primary" sx={{ mt: 1 }}>
-          {price}
+        <Typography variant="h6" color="primary" gutterBottom>
+          {formatPrice(property.price)}
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 2, mb: 1 }}>
+          {bedrooms && (
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Hotel fontSize="small" color="action" />
+              <Typography variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>
+                {bedrooms} Beds
+              </Typography>
+            </Box>
+          )}
+          {bathrooms && (
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Bathtub fontSize="small" color="action" />
+              <Typography variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>
+                {bathrooms} Baths
+              </Typography>
+            </Box>
+          )}
+          {area && (
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <SquareFoot fontSize="small" color="action" />
+              <Typography variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>
+                {area} sq.ft
+              </Typography>
+            </Box>
+          )}
+        </Box>
+        <Typography variant="body2" color="text.secondary">
+          {propertyType}
         </Typography>
       </CardContent>
-      <CardActions sx={{ justifyContent: 'space-between', p: 2 }}>
+      <CardActions>
         <IconButton 
-          onClick={handleFavorite}
-          color={isFavorite ? "error" : "default"}
-          aria-label="add to favorites"
+          onClick={() => onFavorite(property.id)} 
+          color="primary"
+          aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
         >
           {isFavorite ? <Favorite /> : <FavoriteBorder />}
         </IconButton>
-        <IconButton onClick={handleContact} color="primary" aria-label="contact">
-          <Phone />
+        <IconButton 
+          onClick={() => onContact(property.id)}
+          color="primary"
+          aria-label="Contact about property"
+        >
+          <ContactMail />
         </IconButton>
       </CardActions>
     </Card>

@@ -26,7 +26,8 @@ const Login: React.FC = () => {
     setLoading(true);
 
     try {
-      await login(email, password);
+      const response = await login(email, password);
+      console.log('Login response:', response);
       toast.success('Login successful!');
       navigate('/dashboard');
     } catch (err) {
